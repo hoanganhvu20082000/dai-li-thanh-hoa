@@ -1,0 +1,4 @@
+# Temp files
+*.py
+.DS_Store
+Thumbs.db

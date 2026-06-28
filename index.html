@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta name="theme-color" content="#059669">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icons/icon-192.svg">
+<title>Đại lí Thành Hoá — Tra giá & Tính tiền</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <div class="logo">T</div>
+    <div class="shop-info">
+      <div class="shop-name">Đại lí Thành Hoá</div>
+      <div class="shop-sub">Tra giá & Tính tiền · <span id="sync-status">Offline</span></div>
+    </div>
+    <button class="icon-btn" id="scan-btn" title="Quét mã vạch">📷</button>
+    <button class="icon-btn" id="sync-btn" title="Đồng bộ">🔄</button>
+    <button class="icon-btn" id="history-btn" title="Lịch sử">📋</button>
+    <button class="icon-btn" id="theme-btn" title="Đổi nền">🌙</button>
+    <button class="icon-btn" id="owner-btn" title="Chế độ chủ">🔒</button>
+  </div>
+</header>
+<div class="alert-bar" id="alert-bar"><div class="alert-content" id="alert-content">⚠️ <span id="alert-text"></span></div></div>
+<div class="search-wrap">
+  <input type="search" class="search-input" id="search" placeholder="🔍 Gõ tên hoặc mã SP..." autocomplete="off">
+  <select class="sort-select" id="sort">
+    <option value="default">Mặc định</option>
+    <option value="name-asc">Tên A→Z</option>
+    <option value="name-desc">Tên Z→A</option>
+    <option value="price-asc">Giá thấp→cao</option>
+    <option value="price-desc">Giá cao→thấp</option>
+    <option value="stock-asc">Tồn thấp→cao</option>
+  </select>
+</div>
+<div class="stats"><span id="count-info"></span><span id="mode-badge"></span></div>
+<div class="grid" id="grid"></div>
+<div class="footer">© Đại lí Thành Hoá · v2.0</div>
+<div class="cart-bar" id="cart-bar"><div class="cart-bar-inner">
+  <div class="cart-bar-summary" id="cart-bar-summary"><div class="cart-bar-label"><span id="cart-bar-count">0</span> SP</div><div class="cart-bar-total" id="cart-bar-total">0đ</div></div>
+  <button class="cart-bar-clear" id="cart-clear-quick">🗑</button>
+  <button class="cart-bar-btn" id="cart-open">Xem bill</button>
+</div></div>
+<!-- Modals -->
+<div class="modal-overlay" id="cart-modal"><div class="modal" id="cart-modal-body"></div></div>
+<div class="modal-overlay" id="pin-modal"><div class="modal"><h3>🔐 Chế độ chủ</h3><p>Nhập PIN 4 số</p><input type="password" class="pin-input" id="pin-input" inputmode="numeric" maxlength="4" placeholder="••••"><div class="modal-actions"><button class="btn btn-secondary" id="pin-cancel">Huỷ</button><button class="btn btn-primary" id="pin-submit">OK</button></div></div></div>
+<div class="modal-overlay" id="scan-modal"><div class="modal"><h3>📷 Quét mã vạch</h3><p>Đưa mã vạch vào camera</p><div id="scanner-box"></div><div class="modal-actions"><button class="btn btn-secondary" id="scan-close">Đóng</button></div></div></div>
+<div class="modal-overlay" id="history-modal"><div class="modal"><h3>📋 Lịch sử hoá đơn</h3><div id="history-list" style="max-height:60vh;overflow:auto"></div><div class="modal-actions"><button class="btn btn-secondary" id="history-close">Đóng</button><button class="btn btn-danger" id="history-clear">Xoá</button></div></div></div>
+<div class="modal-overlay" id="confirm-modal"><div class="modal"><h3>⚠️ Xác nhận</h3><p id="confirm-msg"></p><div class="modal-actions"><button class="btn btn-secondary" id="confirm-cancel">Huỷ</button><button class="btn btn-danger" id="confirm-ok">OK</button></div></div></div>
+<div class="print-bill" id="print-bill" style="display:none"></div>
+<div class="toast" id="toast"></div>
+<script src="products.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
