@@ -1,6 +1,6 @@
 // ====== Đại lí Thành Hoá - App v2.0 ======
 // CONFIG — Dán URL Apps Script vào đây (nếu có). Để nguyên = chạy offline.
-const SCRIPT_URL = '';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzM__VLUnDJUNnwYfoWDRtMlKA3DBaDIPdjmFrJKLRTrpFS2n1QTJ8sK4NWhKNs4jpW/exec';
 let OWNER_PIN = localStorage.getItem('ownerPin') || '2468';
 
 // Load products: ưu tiên localStorage (có tồn kho đã cập nhật) > PRODUCTS_SEED (data gốc)
