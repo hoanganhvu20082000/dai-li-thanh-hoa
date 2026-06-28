@@ -1,8 +1,16 @@
 // ====== Đại lí Thành Hoá - App v2.0 ======
-// CONFIG
-const SCRIPT_URL = 'DAN_URL_APPS_SCRIPT_VAO_DAY';
+// CONFIG — Dán URL Apps Script vào đây (nếu có). Để nguyên = chạy offline.
+const SCRIPT_URL = '';
 let OWNER_PIN = localStorage.getItem('ownerPin') || '2468';
-let PRODUCTS = (typeof PRODUCTS_SEED !== 'undefined') ? [...PRODUCTS_SEED] : [];
+
+// Load products: ưu tiên localStorage (có tồn kho đã cập nhật) > PRODUCTS_SEED (data gốc)
+function loadProducts() {
+  const saved = localStorage.getItem('products_data');
+  if (saved) try { return JSON.parse(saved); } catch {}
+  return (typeof PRODUCTS_SEED !== 'undefined') ? [...PRODUCTS_SEED] : [];
+}
+function saveProducts() { localStorage.setItem('products_data', JSON.stringify(PRODUCTS)); }
+let PRODUCTS = loadProducts();
 
 // HELPERS
 const fmt = n => new Intl.NumberFormat('vi-VN').format(Math.round(n || 0));
@@ -27,10 +35,10 @@ async function apiPost(action, body) {
 
 // ====== SYNC ======
 async function syncProducts() {
-  if (!isOnline()) return;
+  if (!isOnline()) { showToast('📱 Chế độ offline — dữ liệu lưu trên máy'); return; }
   try {
     const r = await apiGet('getProducts');
-    if (r.products && r.products.length) { PRODUCTS = r.products; renderGrid(); showToast('✓ Đã đồng bộ tồn kho'); $('sync-status').textContent = 'Online · ' + new Date().toLocaleTimeString('vi'); }
+    if (r.products && r.products.length) { PRODUCTS = r.products; saveProducts(); renderGrid(); showToast('✓ Đã đồng bộ tồn kho'); $('sync-status').textContent = 'Online · ' + new Date().toLocaleTimeString('vi'); }
   } catch(e) { showToast('⚠ Lỗi sync: '+e.message); }
 }
 
@@ -150,8 +158,7 @@ function printBill() {
   bill.innerHTML = `<div style="font-family:'Times New Roman',serif;max-width:300px;margin:0 auto">
     <h2 style="text-align:center;margin:0">ĐẠI LÍ THÀNH HOÁ</h2>
     <p style="text-align:center;font-size:12px;margin:4px 0">Hoá đơn bán hàng</p>
-    <p style="font-size:11px">Số: ${no}<br>Ngày: ${now.toLocaleString('vi')}</p>
-    <hr>
+    <p style="font-size:11px">Số: ${no}<br>Ngày: ${now.toLocaleString('vi')}</p><hr>
     <table style="width:100%;font-size:12px;border-collapse:collapse">
     <tr><th style="text-align:left">SP</th><th>SL</th><th>Giá</th><th style="text-align:right">TT</th></tr>
     ${state.cart.map(i=>`<tr><td>${esc(i.name)}</td><td style="text-align:center">${i.qty}</td><td style="text-align:right">${fmt(i.price)}</td><td style="text-align:right">${fmt(i.qty*i.price)}</td></tr>`).join('')}
@@ -160,13 +167,16 @@ function printBill() {
     ${t.disc>0?`<p style="font-size:12px">Giảm: -${fmt(t.disc)}đ</p>`:''}
     <p style="font-size:15px"><b>THANH TOÁN: ${fmt(t.grand)}đ</b></p>
     <p style="font-size:11px;font-style:italic">${amountWords(t.grand)}</p>
-    <p style="text-align:center;font-size:10px;margin-top:12px">Cảm ơn quý khách!</p>
-  </div>`;
-  // Save to history
-  saveHistory({no,date:now.toISOString(),items:[...state.cart],sub:t.sub,disc:t.disc,grand:t.grand});
-  // Save to Google Sheets
-  if(isOnline()){apiPost('saveInvoice',{invoice:{invoiceNo:no,items:state.cart.map(i=>({code:i.code,qty:i.qty,price:i.price})),discount:t.disc}}).then(()=>showToast('✓ Đã lưu lên Sheet')).catch(e=>showToast('⚠ Lỗi lưu: '+e.message));}
-  setTimeout(()=>{window.print();bill.style.display='none';state.cart=[];state.discountVal=0;renderAll();closeModal('cart-modal');showToast('✓ In xong, giỏ đã xoá');},200);
+    <p style="text-align:center;font-size:10px;margin-top:12px">Cảm ơn quý khách!</p></div>`;
+  // Trừ tồn kho local
+  state.cart.forEach(item => {
+    const p = PRODUCTS.find(x => x.code === item.code);
+    if (p) p.stock = Math.max(0, p.stock - item.qty);
+  });
+  saveProducts();
+  saveHistory({no, date:now.toISOString(), items:[...state.cart], sub:t.sub, disc:t.disc, grand:t.grand});
+  if(isOnline()){apiPost('saveInvoice',{invoice:{invoiceNo:no,items:state.cart.map(i=>({code:i.code,qty:i.qty,price:i.price})),discount:t.disc}}).catch(()=>{});}
+  setTimeout(()=>{window.print();bill.style.display='none';state.cart=[];state.discountVal=0;renderAll();closeModal('cart-modal');showToast('✓ In xong');},200);
 }
 
 // ====== HISTORY ======
@@ -186,20 +196,19 @@ async function startScanner(){
     scannerStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
     box.innerHTML='<video autoplay playsinline></video><p style="text-align:center;font-size:11px;color:var(--muted);padding:8px">Đưa mã vạch vào khung hình</p>';
     box.querySelector('video').srcObject=scannerStream;
-    // Simple polling with BarcodeDetector if available
     if('BarcodeDetector' in window){
       const det = new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39']});
       const video = box.querySelector('video');
       const scan = async()=>{
         if(!scannerStream) return;
-        try{const codes=await det.detect(video);if(codes.length){const code=codes[0].rawValue;stopScanner();const p=PRODUCTS.find(x=>x.code===code);if(p){addToCart(code);showToast('📷 '+p.name);}else{showToast('⚠ Không tìm thấy: '+code);}return;}}catch{}
+        try{const codes=await det.detect(video);if(codes.length){const code=codes[0].rawValue;stopScanner();const p=PRODUCTS.find(x=>x.code===code);if(p){addToCart(code);showToast('📷 '+p.name);}else{showToast('⚠ Mã không tìm thấy: '+code);}return;}}catch{}
         requestAnimationFrame(scan);
       };
       video.onloadedmetadata=()=>scan();
     } else {
-      box.innerHTML+='<p style="text-align:center;color:var(--warning);font-size:12px;padding:8px">Trình duyệt không hỗ trợ BarcodeDetector.<br>Hãy gõ mã vào ô tìm kiếm.</p>';
+      box.innerHTML+='<p style="text-align:center;color:var(--warning);font-size:12px;padding:8px">Trình duyệt chưa hỗ trợ quét mã vạch.<br>Gõ mã vào ô tìm kiếm.</p>';
     }
-  }catch(e){box.innerHTML='<p style="padding:20px;text-align:center;color:var(--danger)">Không truy cập được camera:<br>'+e.message+'</p>';}
+  }catch(e){box.innerHTML='<p style="padding:20px;text-align:center;color:var(--danger)">Không truy cập camera:<br>'+e.message+'</p>';}
 }
 function stopScanner(){if(scannerStream){scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null;}closeModal('scan-modal');}
 
@@ -223,68 +232,40 @@ function showModal(id){$(id).classList.add('show');}
 function closeModal(id){$(id).classList.remove('show');}
 let confirmCb=null;
 function showConfirm(msg,cb){$('confirm-msg').textContent=msg;confirmCb=cb;showModal('confirm-modal');}
-
-// ====== RENDER ALL ======
 function renderAll(){renderGrid();renderCartBar();}
 
 // ====== EVENT LISTENERS ======
 document.addEventListener('DOMContentLoaded',()=>{
-  // Theme
   if(localStorage.getItem('theme')==='dark')document.documentElement.setAttribute('data-theme','dark');
   $('theme-btn').onclick=()=>{const d=document.documentElement;const dark=d.getAttribute('data-theme')==='dark';d.setAttribute('data-theme',dark?'':'dark');localStorage.setItem('theme',dark?'':'dark');$('theme-btn').textContent=dark?'🌙':'☀️';};
-
-  // Search & Sort
   $('search').oninput=e=>{state.search=e.target.value;renderGrid();};
   $('sort').onchange=e=>{state.sort=e.target.value;renderGrid();};
-
-  // Grid clicks (delegation)
   $('grid').onclick=e=>{
     const btn=e.target.closest('.add-btn');if(btn){e.stopPropagation();addToCart(btn.dataset.code);return;}
     const plus=e.target.closest('.cq-plus');if(plus){e.stopPropagation();updateQty(plus.dataset.code,1);return;}
     const minus=e.target.closest('.cq-minus');if(minus){e.stopPropagation();updateQty(minus.dataset.code,-1);return;}
     const card=e.target.closest('.card');if(card)addToCart(card.dataset.code);
   };
-
-  // Cart bar
   $('cart-open').onclick=()=>openCartModal();
   $('cart-bar-summary').onclick=()=>openCartModal();
   $('cart-clear-quick').onclick=()=>clearCart();
-
-  // Owner mode
   $('owner-btn').onclick=()=>{if(state.ownerMode){state.ownerMode=false;document.body.classList.remove('owner-mode');$('owner-btn').classList.remove('active');$('owner-btn').textContent='🔒';renderGrid();}else{$('pin-input').value='';showModal('pin-modal');setTimeout(()=>$('pin-input').focus(),100);}};
   $('pin-submit').onclick=()=>{if($('pin-input').value===OWNER_PIN){state.ownerMode=true;document.body.classList.add('owner-mode');$('owner-btn').classList.add('active');$('owner-btn').textContent='🔓';closeModal('pin-modal');showToast('👑 Chế độ chủ');renderGrid();}else{$('pin-input').classList.add('error');setTimeout(()=>$('pin-input').classList.remove('error'),400);}};
   $('pin-cancel').onclick=()=>closeModal('pin-modal');
   $('pin-input').onkeydown=e=>{if(e.key==='Enter')$('pin-submit').click();};
-
-  // Scanner
   $('scan-btn').onclick=()=>startScanner();
   $('scan-close').onclick=()=>stopScanner();
-
-  // History
   $('history-btn').onclick=()=>{renderHistory();showModal('history-modal');};
   $('history-close').onclick=()=>closeModal('history-modal');
   $('history-clear').onclick=()=>showConfirm('Xoá toàn bộ lịch sử?',()=>{localStorage.removeItem('invoiceHistory');renderHistory();showToast('✓ Đã xoá');closeModal('confirm-modal');});
-
-  // Confirm modal
   $('confirm-ok').onclick=()=>{closeModal('confirm-modal');if(confirmCb)confirmCb();confirmCb=null;};
   $('confirm-cancel').onclick=()=>{closeModal('confirm-modal');confirmCb=null;};
-
-  // Sync button
   $('sync-btn').onclick=()=>{showToast('🔄 Đang sync...');syncProducts();};
-
-  // Close modals on overlay click
   document.querySelectorAll('.modal-overlay').forEach(m=>m.onclick=e=>{if(e.target===m){closeModal(m.id);if(m.id==='scan-modal')stopScanner();}});
-
-  // Alert bar click -> filter low stock
-  $('alert-bar').onclick=()=>{$('search').value='';state.search='';state.sort='stock-asc';$('sort').value='stock-asc';renderGrid();showToast('Hiển thị SP tồn thấp');};
-
-  // Initial render
+  $('alert-bar').onclick=()=>{$('search').value='';state.search='';state.sort='stock-asc';$('sort').value='stock-asc';renderGrid();};
   renderAll();
-  $('sync-status').textContent = isOnline() ? 'Đang kết nối...' : 'Offline (chưa cấu hình URL)';
-  if(isOnline()) syncProducts();
-  // Auto sync every 60s
+  $('sync-status').textContent=isOnline()?'Online':'Offline (dữ liệu trên máy)';
+  if(isOnline())syncProducts();
   setInterval(()=>{if(isOnline())syncProducts();},60000);
 });
-
-// ====== PWA Service Worker ======
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
